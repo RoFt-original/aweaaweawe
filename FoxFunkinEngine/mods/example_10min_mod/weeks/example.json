@@ -1,0 +1,7 @@
+{
+  "id": "example",
+  "name": "Example Week",
+  "songs": ["fox-test"],
+  "characters": ["dad", "bf", "gf"],
+  "difficulties": ["easy", "normal", "hard"]
+}

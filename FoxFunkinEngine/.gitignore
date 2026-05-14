@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+/dist/
+/build/
+*.spec
+settings.json
+logs/
+saves/
+
+# Do not commit external FNF assets.
+data/*
+!data/README_PUT_ASSETS_HERE.txt
+!data/.gitkeep
+
+# User mods are local by default. Remove this if you want to publish your own original mod.
+mods/*
+!mods/.gitkeep
+!mods/example_10min_mod/
+!mods/example_10min_mod/**

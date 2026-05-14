@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "nodes": [
+    { "id": "start", "type": "Start", "x": 40, "y": 80, "props": {} },
+    { "id": "text", "type": "ShowText", "x": 210, "y": 80, "props": { "text": "visual graph fired", "duration": 1.5 } },
+    { "id": "zoom", "type": "CameraZoom", "x": 430, "y": 80, "props": { "zoom": 1.06 } }
+  ],
+  "links": [
+    { "from": "start", "to": "text" },
+    { "from": "text", "to": "zoom" }
+  ]
+}

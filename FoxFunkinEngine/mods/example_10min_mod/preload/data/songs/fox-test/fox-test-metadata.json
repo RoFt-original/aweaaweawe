@@ -1,0 +1,23 @@
+{
+  "version": "2.2.4",
+  "songName": "Fox Test",
+  "artist": "Original placeholder tone",
+  "charter": "FoxFunkin",
+  "playData": {
+    "songVariations": [],
+    "difficulties": ["easy", "normal", "hard"],
+    "characters": {
+      "player": "bf",
+      "girlfriend": "gf",
+      "opponent": "dad",
+      "opponentVocals": [],
+      "playerVocals": []
+    },
+    "stage": "mainStage",
+    "noteStyle": "funkin",
+    "ratings": { "easy": 1, "normal": 1, "hard": 2 },
+    "album": "example"
+  },
+  "generatedBy": "FoxFunkin Engine",
+  "timeChanges": [{ "t": 0, "b": 0, "bpm": 120, "bt": [4, 4, 4, 4] }]
+}

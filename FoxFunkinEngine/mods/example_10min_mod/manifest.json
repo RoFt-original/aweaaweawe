@@ -1,0 +1,15 @@
+{
+  "id": "example_10min_mod",
+  "title": "Example 10-Minute Mod",
+  "version": "1.0.0",
+  "author": "Fox",
+  "enabled": true,
+  "description": "Tiny original test mod used to prove the engine boots without bundled FNF assets.",
+  "dependencies": [],
+  "priority": 0,
+  "entryGraphs": {
+    "OnBeat": [],
+    "OnStep": [],
+    "OnNoteHit": []
+  }
+}
