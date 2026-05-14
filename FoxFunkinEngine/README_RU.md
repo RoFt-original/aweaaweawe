@@ -7,13 +7,23 @@
 ## Быстрый запуск
 
 1. Установи Python 3.11+ на Windows.
-2. Запусти `run.bat`.
-3. Движок создаст `.venv`, поставит `pygame` и откроется.
-4. Без внешних ассетов он запустит плейсхолдеры и примерный `example_10min_mod`.
+2. Зайди в папку `FoxFunkinEngine`.
+3. Запусти `run.bat`.
+4. Движок создаст `.venv`, поставит `pygame` и откроется.
+5. Без внешних ассетов он запустит плейсхолдеры и примерный `example_10min_mod`.
 
-## Подключить ассеты из funkin.assets
+## Что поправлено в текущей v1
 
-Содержимое репозитория ассетов надо положить так:
+- Управление разделено на меню и геймплей, чтобы клавиши нот не ломали навигацию.
+- Игровой layout теперь ближе к FNF/модам: `D F J K`, плюс стрелки как запасной вариант.
+- Меню использует `W A S D`, стрелки, `Enter/Space`, `Esc`.
+- Визуал меню стал нормальнее: фон, панель, подсветка выбранного пункта, подсказки управления.
+- Ноты и рецепторы получили более читаемые цвета, glow-подсветку, sustain-outline и динамические подписи клавиш.
+- Добавлен GitHub Actions workflow `.github/workflows/windows-build.yml`, который собирает `FoxFunkinEngine.exe` и `FoxFunkinTools.exe` на Windows и выкладывает artifact.
+
+## Подключить ассеты
+
+Собственные ассеты или локально скачанные compatible assets надо положить так:
 
 ```text
 FoxFunkinEngine/
@@ -31,23 +41,28 @@ FoxFunkinEngine/
 
 После копирования запусти `check_assets.bat`. Он проверит, что есть `preload/data/songs`, `preload/data/characters`, `shared/images`, `songs`.
 
-## Сборка exe
+## Сборка exe локально
 
 Запусти:
 
 ```bat
-build_exe.bat
+build_release.bat
 ```
 
 Получишь:
 
 ```text
 dist/FoxFunkinEngine.exe
+dist/FoxFunkinTools.exe
 dist/data/
 dist/mods/
 ```
 
 Потом внешние ассеты кладёшь в `dist/data/`, а моды — в `dist/mods/`.
+
+## Сборка exe на GitHub
+
+Открой вкладку **Actions** -> **Build Windows EXE** -> **Run workflow**. После сборки скачай artifact `FoxFunkinEngine-Windows`.
 
 ## Моддинг за 10 минут
 
@@ -67,10 +82,12 @@ dist/mods/
 
 ## Управление
 
-- Меню: стрелки/WASD, Enter, Esc.
-- Игра: A/S/W/D или стрелки.
-- Pause: Enter.
-- Back: Esc.
+- Меню: `W/A/S/D` или стрелки, `Enter/Space`, `Esc`.
+- Игра: `D/F/J/K` или стрелки.
+- Pause: `Enter` или `P`.
+- Back: `Esc`.
+- Reset song: `R`.
+- Fullscreen: `F11`.
 
 ## Структура мода
 
@@ -86,4 +103,4 @@ mods/my_mod/
 
 ## Честная техническая грань
 
-Это не форк официального исходника и не запакованная копия FNF. Это самостоятельный Python/Pygame-рантайм, настроенный на структуру `funkin.assets` и на моддинг. Физика тайминга, FNF v2 chart data, внешние ассеты, меню, freeplay, моды и визуальные события уже собраны в рабочий проект. Некоторые точные штуки оригинала вроде полного Haxe/Flixel-пайплайна, всех шейдеров, Animate Atlas fidelity до пикселя и сложных cutscene-сценариев вынесены в `docs/ROADMAP_FULL_COMPAT_RU.md`, потому что иначе мы бы притворялись, что за один удар молотком построили собор. Милый самообман, но всё-таки самообман.
+Это не форк официального исходника и не запакованная копия FNF. Это самостоятельный Python/Pygame-рантайм, настроенный на структуру external/custom assets и на моддинг. Физика тайминга, FNF v2 chart data, внешние ассеты, меню, freeplay, моды и визуальные события уже собраны в рабочий проект. Некоторые точные штуки оригинала вроде полного Haxe/Flixel-пайплайна, всех шейдеров, Animate Atlas fidelity до пикселя и сложных cutscene-сценариев вынесены в `docs/ROADMAP_FULL_COMPAT_RU.md`.
