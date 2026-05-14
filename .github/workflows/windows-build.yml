@@ -1,0 +1,55 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'FoxFunkinEngine/**'
+      - '.github/workflows/windows-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: FoxFunkinEngine
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Syntax check
+        run: python -m compileall -q foxfunkin run_engine.py run_tools.py
+
+      - name: Build engine and tools
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name FoxFunkinEngine run_engine.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name FoxFunkinTools run_tools.py
+
+      - name: Prepare release folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/data | Out-Null
+          New-Item -ItemType Directory -Force dist/mods | Out-Null
+          New-Item -ItemType Directory -Force dist/docs | Out-Null
+          Copy-Item README_RU.md dist/README_RU.txt -Force
+          Copy-Item docs/* dist/docs -Recurse -Force
+          Copy-Item mods/example_10min_mod dist/mods/example_10min_mod -Recurse -Force
+          Copy-Item data/README_PUT_ASSETS_HERE.txt dist/data/README_PUT_ASSETS_HERE.txt -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FoxFunkinEngine-Windows
+          path: FoxFunkinEngine/dist/**
