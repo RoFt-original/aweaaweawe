@@ -15,6 +15,33 @@ EXPECTED_ROOTS = [
 ]
 
 
+LIKELY_ASSET_CONTAINERS = [
+    Path("assets"),
+    Path("export/release/windows/bin/assets"),
+    Path("export/release/macos/bin/assets"),
+    Path("export/release/linux/bin/assets"),
+]
+
+
+def find_asset_root(source: Path) -> Path:
+    """Accept either funkin.assets root, an assets/ folder, or a built FNF folder."""
+    source = source.resolve()
+    if any((source / name).exists() for name in EXPECTED_ROOTS):
+        return source
+    for rel in LIKELY_ASSET_CONTAINERS:
+        candidate = source / rel
+        if candidate.exists() and any((candidate / name).exists() for name in EXPECTED_ROOTS):
+            return candidate
+    for candidate in source.rglob("preload"):
+        parent = candidate.parent
+        if (parent / "shared").exists() or (parent / "songs").exists():
+            return parent
+    raise FileNotFoundError(
+        "Could not find an FNF assets root. Point import_assets.bat at a folder "
+        "that contains preload/, shared/, songs/, week1/, etc."
+    )
+
+
 def copy_tree(src: Path, dst: Path) -> None:
     if dst.exists():
         shutil.rmtree(dst)
@@ -23,9 +50,7 @@ def copy_tree(src: Path, dst: Path) -> None:
 
 def import_assets(source: Path, root: Path | None = None) -> list[str]:
     root = root or project_root()
-    source = source.resolve()
-    if not source.exists():
-        raise FileNotFoundError(source)
+    source = find_asset_root(source)
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     copied: list[str] = []
@@ -37,14 +62,14 @@ def import_assets(source: Path, root: Path | None = None) -> list[str]:
     save_json(data_dir / ".asset_source.local.json", {
         "source": str(source),
         "copied": copied,
-        "note": "Local import only. Do not commit proprietary funkin.assets content.",
+        "note": "Local import only. Do not commit third-party/original game assets unless you own the rights.",
     })
     return copied
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Import a local funkin.assets checkout into data/.")
-    parser.add_argument("source", help="Path to local funkin.assets folder")
+    parser = argparse.ArgumentParser(description="Import a local FNF-compatible assets folder into data/.")
+    parser.add_argument("source", help="Path to local assets folder or a folder containing assets/")
     args = parser.parse_args(argv)
     copied = import_assets(Path(args.source))
     print("Copied: " + (", ".join(copied) if copied else "nothing"))
