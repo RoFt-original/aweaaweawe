@@ -6,15 +6,15 @@ from foxfunkin.core.jsonx import load_json
 
 
 LANE_NAMES = ("LEFT", "DOWN", "UP", "RIGHT")
-DEFAULT_LANE_KEYS = ("D/LEFT", "F/DOWN", "J/UP", "K/RIGHT")
+DEFAULT_LANE_KEYS = ("D", "F", "J", "K")
 LANE_COLORS = ((210, 70, 170), (70, 210, 245), (80, 235, 125), (245, 75, 85))
 
 
 def make_arrow(size: int, lane: int, receptor: bool = False) -> pygame.Surface:
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     color = LANE_COLORS[lane % 4]
-    outline = (250, 250, 255) if receptor else color
-    fill_alpha = 86 if receptor else 238
+    outline = (245, 250, 255) if receptor else color
+    fill_alpha = 95 if receptor else 242
     fill = (color[0], color[1], color[2], fill_alpha)
 
     c = size // 2
@@ -28,12 +28,12 @@ def make_arrow(size: int, lane: int, receptor: bool = False) -> pygame.Surface:
     else:
         pts = [(size - pad, c), (pad, pad), (pad, size - pad), (size - pad, c)]
 
-    pygame.draw.polygon(surf, (color[0], color[1], color[2], 70), pts)
+    pygame.draw.polygon(surf, (color[0], color[1], color[2], 76), pts)
     pygame.draw.polygon(surf, fill, pts)
-    pygame.draw.polygon(surf, outline, pts, 5 if receptor else 3)
+    pygame.draw.polygon(surf, outline, pts, 6 if receptor else 3)
     if not receptor:
         inner = [(int((x + c) / 2), int((y + c) / 2)) for x, y in pts[:-1]]
-        pygame.draw.polygon(surf, (255, 255, 255, 80), inner, 2)
+        pygame.draw.polygon(surf, (255, 255, 255, 92), inner, 2)
     else:
         pygame.draw.circle(surf, outline, (c, c), max(3, size // 12), 2)
     return surf
@@ -104,22 +104,44 @@ class NoteRenderer:
                     return frame
         return next(iter(frames.values()), None)
 
-    def draw_receptors(self, screen: pygame.Surface, xs: list[int], y: int, font=None, labels: tuple[str, ...] | None = None, active: set[int] | None = None) -> None:
+    def draw_receptors(
+        self,
+        screen: pygame.Surface,
+        xs: list[int],
+        y: int,
+        font=None,
+        labels: tuple[str, ...] | None = None,
+        active: set[int] | None = None,
+        flashes: dict[int, float] | None = None,
+        show_labels: bool = True,
+        alpha: int = 255,
+    ) -> None:
         labels = labels or DEFAULT_LANE_KEYS
         active = active or set()
+        flashes = flashes or {}
         for lane, x in enumerate(xs):
             color = LANE_COLORS[lane]
-            if lane in active:
-                glow = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
-                pygame.draw.circle(glow, (*color, 80), (self.size, self.size), self.size - 4)
-                screen.blit(glow, glow.get_rect(center=(x, y)))
-            img = self.receptor_surfaces[lane]
+            flash = max(0.0, min(1.0, float(flashes.get(lane, 0.0))))
+            pressed = lane in active or flash > 0.0
+            scale = 1.0 + (0.16 if pressed else 0.0) + flash * 0.10
+            glow_alpha = int((70 if pressed else 22) + flash * 120)
+            glow = pygame.Surface((self.size * 3, self.size * 3), pygame.SRCALPHA)
+            pygame.draw.circle(glow, (*color, glow_alpha), (self.size * 3 // 2, self.size * 3 // 2), int(self.size * (0.72 + flash * 0.35)))
+            screen.blit(glow, glow.get_rect(center=(x, y)))
+
+            img = self.receptor_surfaces[lane].copy()
+            img.set_alpha(alpha)
+            if scale != 1.0:
+                iw, ih = img.get_size()
+                img = pygame.transform.smoothscale(img, (max(1, int(iw * scale)), max(1, int(ih * scale))))
             screen.blit(img, img.get_rect(center=(x, y)))
-            if font:
+
+            if show_labels and font:
                 text = labels[lane] if lane < len(labels) else DEFAULT_LANE_KEYS[lane]
-                label = font.render(text, True, (225, 225, 235))
+                color_text = (255, 250, 170) if pressed else (225, 225, 235)
+                label = font.render(text, True, color_text)
                 shadow = font.render(text, True, (0, 0, 0))
-                rect = label.get_rect(center=(x, y + self.size // 2 + 16))
+                rect = label.get_rect(center=(x, y + self.size // 2 + 17))
                 screen.blit(shadow, rect.move(2, 2))
                 screen.blit(label, rect)
 
@@ -134,12 +156,23 @@ class NoteRenderer:
             else:
                 rect = pygame.Rect(x - rect_w // 2, y, rect_w, sustain_px)
             pygame.draw.rect(screen, (*color, 155), rect, border_radius=rect_w // 2)
-            pygame.draw.rect(screen, (255, 255, 255, 75), rect.inflate(4, 0), 2, border_radius=rect_w // 2)
+            pygame.draw.rect(screen, (255, 255, 255, 82), rect.inflate(4, 0), 2, border_radius=rect_w // 2)
         if alpha >= 220:
             glow = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
-            pygame.draw.circle(glow, (*color, 44), (self.size, self.size), self.size // 2 + 18)
+            pygame.draw.circle(glow, (*color, 48), (self.size, self.size), self.size // 2 + 18)
             screen.blit(glow, glow.get_rect(center=(x, y)))
         screen.blit(img, img.get_rect(center=(x, y)))
         if kind and font:
             label = font.render(kind[:10], True, (255, 245, 180))
             screen.blit(label, label.get_rect(center=(x, y - self.size // 2 - 9)))
+
+    def draw_splash(self, screen: pygame.Surface, lane: int, x: int, y: int, life: float) -> None:
+        life = max(0.0, min(1.0, life))
+        color = LANE_COLORS[lane]
+        surf = pygame.Surface((self.size * 3, self.size * 3), pygame.SRCALPHA)
+        c = self.size * 3 // 2
+        radius = int(self.size * (0.28 + (1.0 - life) * 0.85))
+        alpha = int(190 * life)
+        pygame.draw.circle(surf, (*color, alpha), (c, c), radius, 5)
+        pygame.draw.circle(surf, (255, 255, 255, int(alpha * 0.65)), (c, c), max(4, radius // 3), 2)
+        screen.blit(surf, surf.get_rect(center=(x, y)))
