@@ -12,6 +12,27 @@ from .ui import draw_text, draw_panel
 from .highscores import best_score
 
 
+def native_menu_action(key: int) -> str | None:
+    """Hard fallback so menus work even if settings.json has old/broken binds."""
+    if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+        return "accept"
+    if key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+        return "back"
+    if key in (pygame.K_UP, pygame.K_w):
+        return "up"
+    if key in (pygame.K_DOWN, pygame.K_s):
+        return "down"
+    if key in (pygame.K_LEFT, pygame.K_a):
+        return "left"
+    if key in (pygame.K_RIGHT, pygame.K_d):
+        return "right"
+    if key == pygame.K_TAB:
+        return "variation"
+    if key == pygame.K_F11:
+        return "fullscreen"
+    return None
+
+
 class MenuState(State):
     items: list[str] = []
 
@@ -21,6 +42,9 @@ class MenuState(State):
         self.font = self.app.assets.font(32)
         self.small = self.app.assets.font(22)
 
+    def menu_action(self, key: int) -> str | None:
+        return native_menu_action(key) or self.app.input.menu_action_for_key(key)
+
     def move(self, delta: int):
         if self.items:
             self.selected = (self.selected + delta) % len(self.items)
@@ -28,7 +52,7 @@ class MenuState(State):
     def handle_event(self, event):
         if event.type != pygame.KEYDOWN:
             return
-        action = self.app.input.menu_action_for_key(event.key)
+        action = self.menu_action(event.key)
         if action == "up":
             self.move(-1)
         elif action == "down":
@@ -54,7 +78,7 @@ class MenuState(State):
             pygame.draw.rect(screen, color, (0, int(h * i / 10), w, int(h / 10) + 2))
         pygame.draw.circle(screen, (90, 40, 120), (w - 120, 100), 170)
         pygame.draw.circle(screen, (30, 120, 150), (120, h - 80), 190)
-        draw_text(screen, self.title_font, title, (w // 2 + 3, 90 + 3), (0, 0, 0), "center")
+        draw_text(screen, self.title_font, title, (w // 2 + 3, 93), (0, 0, 0), "center")
         draw_text(screen, self.title_font, title, (w // 2, 90), (255, 245, 255), "center")
 
     def draw_items(self, screen, title):
@@ -65,12 +89,15 @@ class MenuState(State):
         y = panel.y + 28
         for i, item in enumerate(self.items):
             selected = i == self.selected
-            color = (255, 222, 80) if selected else (235, 235, 245)
             if selected:
                 sel_rect = pygame.Rect(panel.x + 22, y - 7, panel.width - 44, 43)
-                pygame.draw.rect(screen, (255, 210, 70, 42), sel_rect, border_radius=12)
-                pygame.draw.rect(screen, (255, 220, 90), sel_rect, 2, border_radius=12)
+                pygame.draw.rect(screen, (255, 220, 78), sel_rect, border_radius=12)
+                pygame.draw.rect(screen, (255, 250, 190), sel_rect, 2, border_radius=12)
+                color = (32, 24, 18)
+            else:
+                color = (235, 235, 245)
             prefix = "> " if selected else "  "
+            draw_text(screen, self.font, prefix + item, (w // 2 + (2 if selected else 0), y + (2 if selected else 0)), (0, 0, 0) if selected else color, "center")
             draw_text(screen, self.font, prefix + item, (w // 2, y), color, "center")
             y += 54
         draw_text(screen, self.small, "W/S or arrows: move   Enter/Space: select   Esc: back   F11: fullscreen", (w // 2, h - 34), (190, 190, 215), "center")
@@ -187,7 +214,7 @@ class FreeplayState(MenuState):
     def handle_event(self, event):
         if event.type != pygame.KEYDOWN:
             return
-        action = self.app.input.menu_action_for_key(event.key)
+        action = self.menu_action(event.key)
         if action == "left":
             self.diff_index -= 1
             self.refresh_items()
@@ -222,7 +249,7 @@ class FreeplayState(MenuState):
             best_text = f"Best: {best.get('score')} {best.get('rank')}" if best else "Best: -"
             draw_text(screen, self.small, f"A/D or arrows: difficulty   Tab: variation   {best_text}", (rect.x + 20, rect.y + 82), (195, 195, 212))
         else:
-            draw_text(screen, self.small, "Put custom assets into /data, or create a mod with create_mod.bat.", (w // 2, h - 86), (255, 222, 80), "center")
+            draw_text(screen, self.small, "Put custom assets into /data, or run import_assets.bat with a local assets folder.", (w // 2, h - 86), (255, 222, 80), "center")
 
 
 class StoryState(MenuState):
@@ -247,13 +274,17 @@ class StoryState(MenuState):
             return
         songs = self.levels[self.selected].get("songs", [])
         if songs:
-            self.app.states.change(GameplayState, song_id=str(songs[0]), difficulty="normal")
+            first = songs[0]
+            if isinstance(first, dict):
+                first = first.get("id") or first.get("song") or first.get("name")
+            if first:
+                self.app.states.change(GameplayState, song_id=str(first), difficulty="normal")
 
     def draw(self, screen):
         self.draw_items(screen, "Story Mode")
         if self.levels:
             songs = self.levels[self.selected].get("songs", [])
-            draw_text(screen, self.small, "Songs: " + ", ".join(str(s) for s in songs), (screen.get_width() // 2, screen.get_height() - 68), (190, 190, 215), "center")
+            draw_text(screen, self.small, "Songs: " + ", ".join(str(s.get('id', s)) if isinstance(s, dict) else str(s) for s in songs), (screen.get_width() // 2, screen.get_height() - 68), (190, 190, 215), "center")
         else:
             draw_text(screen, self.small, "Add level JSON files to preload/data/levels.", (screen.get_width() // 2, screen.get_height() - 68), (190, 190, 215), "center")
 
