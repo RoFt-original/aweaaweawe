@@ -1,36 +1,40 @@
 from __future__ import annotations
 
-import math
 import pygame
 
 from foxfunkin.core.jsonx import load_json
 
 
 LANE_NAMES = ("LEFT", "DOWN", "UP", "RIGHT")
-LANE_KEYS = ("A/←", "S/↓", "W/↑", "D/→")
-LANE_COLORS = ((194, 75, 153), (75, 210, 235), (80, 230, 120), (230, 70, 75))
+DEFAULT_LANE_KEYS = ("D/LEFT", "F/DOWN", "J/UP", "K/RIGHT")
+LANE_COLORS = ((210, 70, 170), (70, 210, 245), (80, 235, 125), (245, 75, 85))
 
 
 def make_arrow(size: int, lane: int, receptor: bool = False) -> pygame.Surface:
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     color = LANE_COLORS[lane % 4]
-    outline = (245, 245, 245) if receptor else color
-    fill = (color[0], color[1], color[2], 110 if receptor else 235)
+    outline = (250, 250, 255) if receptor else color
+    fill_alpha = 86 if receptor else 238
+    fill = (color[0], color[1], color[2], fill_alpha)
 
     c = size // 2
     pad = size // 6
-    if lane == 0:  # left
+    if lane == 0:
         pts = [(pad, c), (size - pad, pad), (size - pad, size - pad), (pad, c)]
-    elif lane == 1:  # down
+    elif lane == 1:
         pts = [(c, size - pad), (pad, pad), (size - pad, pad), (c, size - pad)]
-    elif lane == 2:  # up
+    elif lane == 2:
         pts = [(c, pad), (pad, size - pad), (size - pad, size - pad), (c, pad)]
-    else:  # right
+    else:
         pts = [(size - pad, c), (pad, pad), (pad, size - pad), (size - pad, c)]
 
+    pygame.draw.polygon(surf, (color[0], color[1], color[2], 70), pts)
     pygame.draw.polygon(surf, fill, pts)
-    pygame.draw.polygon(surf, outline, pts, 4 if receptor else 2)
-    if receptor:
+    pygame.draw.polygon(surf, outline, pts, 5 if receptor else 3)
+    if not receptor:
+        inner = [(int((x + c) / 2), int((y + c) / 2)) for x, y in pts[:-1]]
+        pygame.draw.polygon(surf, (255, 255, 255, 80), inner, 2)
+    else:
         pygame.draw.circle(surf, outline, (c, c), max(3, size // 12), 2)
     return surf
 
@@ -100,25 +104,41 @@ class NoteRenderer:
                     return frame
         return next(iter(frames.values()), None)
 
-    def draw_receptors(self, screen: pygame.Surface, xs: list[int], y: int, font=None) -> None:
+    def draw_receptors(self, screen: pygame.Surface, xs: list[int], y: int, font=None, labels: tuple[str, ...] | None = None, active: set[int] | None = None) -> None:
+        labels = labels or DEFAULT_LANE_KEYS
+        active = active or set()
         for lane, x in enumerate(xs):
+            color = LANE_COLORS[lane]
+            if lane in active:
+                glow = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
+                pygame.draw.circle(glow, (*color, 80), (self.size, self.size), self.size - 4)
+                screen.blit(glow, glow.get_rect(center=(x, y)))
             img = self.receptor_surfaces[lane]
             screen.blit(img, img.get_rect(center=(x, y)))
             if font:
-                label = font.render(LANE_KEYS[lane], True, (220, 220, 220))
-                screen.blit(label, label.get_rect(center=(x, y + self.size // 2 + 16)))
+                text = labels[lane] if lane < len(labels) else DEFAULT_LANE_KEYS[lane]
+                label = font.render(text, True, (225, 225, 235))
+                shadow = font.render(text, True, (0, 0, 0))
+                rect = label.get_rect(center=(x, y + self.size // 2 + 16))
+                screen.blit(shadow, rect.move(2, 2))
+                screen.blit(label, rect)
 
     def draw_note(self, screen: pygame.Surface, lane: int, x: int, y: int, alpha: int = 255, sustain_px: int = 0, downscroll: bool = False, kind: str = "", font=None) -> None:
         img = self.note_surfaces[lane].copy()
         img.set_alpha(alpha)
+        color = LANE_COLORS[lane]
         if sustain_px > 4:
-            rect_w = max(10, self.size // 4)
-            color = LANE_COLORS[lane]
+            rect_w = max(12, self.size // 4)
             if downscroll:
                 rect = pygame.Rect(x - rect_w // 2, y - sustain_px, rect_w, sustain_px)
             else:
                 rect = pygame.Rect(x - rect_w // 2, y, rect_w, sustain_px)
             pygame.draw.rect(screen, (*color, 155), rect, border_radius=rect_w // 2)
+            pygame.draw.rect(screen, (255, 255, 255, 75), rect.inflate(4, 0), 2, border_radius=rect_w // 2)
+        if alpha >= 220:
+            glow = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
+            pygame.draw.circle(glow, (*color, 44), (self.size, self.size), self.size // 2 + 18)
+            screen.blit(glow, glow.get_rect(center=(x, y)))
         screen.blit(img, img.get_rect(center=(x, y)))
         if kind and font:
             label = font.render(kind[:10], True, (255, 245, 180))
