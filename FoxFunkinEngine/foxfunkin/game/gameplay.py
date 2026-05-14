@@ -34,9 +34,9 @@ class GameplayState(State):
 
         w, h = self.app.screen.get_size()
         self.characters = {
-            "dad": Character(self.song.opponent, self.app.assets, self.app.resolver, pos=self.stage.character_position("dad", (w * 0.25, h * 0.63)), scale=0.72, flip=False),
-            "gf": Character(self.song.girlfriend, self.app.assets, self.app.resolver, pos=self.stage.character_position("gf", (w * 0.50, h * 0.55)), scale=0.62, flip=False),
-            "bf": Character(self.song.player, self.app.assets, self.app.resolver, pos=self.stage.character_position("bf", (w * 0.75, h * 0.66)), scale=0.72, flip=True),
+            "dad": Character(self.song.opponent, self.app.assets, self.app.resolver, pos=self.stage.character_position("dad", (w * 0.25, h * 0.68)), scale=0.72, flip=False),
+            "gf": Character(self.song.girlfriend, self.app.assets, self.app.resolver, pos=self.stage.character_position("gf", (w * 0.50, h * 0.58)), scale=0.62, flip=False),
+            "bf": Character(self.song.player, self.app.assets, self.app.resolver, pos=self.stage.character_position("bf", (w * 0.75, h * 0.70)), scale=0.72, flip=True),
         }
         self.character_draw_order = sorted(
             ["dad", "gf", "bf"],
@@ -57,6 +57,9 @@ class GameplayState(State):
         self.events = list(self.chart.events)
         self.scroll_speed = self.chart.scroll_speed * float(self.app.config.get("gameplay", {}).get("scroll_speed_multiplier", 1.0))
         self.spawned_text: list[dict] = []
+        self.hit_popups: list[dict] = []
+        self.splashes: list[dict] = []
+        self.receptor_flashes: dict[int, float] = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0}
         self.paused = False
         self.finished = False
         self.song_started = 0
@@ -126,6 +129,7 @@ class GameplayState(State):
         lane = self.app.input.lane_for_key(event.key)
         if lane is not None and not self.paused:
             self.held_lanes.add(lane)
+            self.receptor_flashes[lane] = max(self.receptor_flashes.get(lane, 0.0), 0.35)
             self.try_hit(lane)
 
     def toggle_pause(self):
@@ -156,6 +160,21 @@ class GameplayState(State):
         if text:
             self.spawned_text.append({"text": text, "ttl": float(duration)})
 
+    def spawn_hit_feedback(self, lane: int, rating: str, diff: float) -> None:
+        w, h = self.app.screen.get_size()
+        _, ply_xs = self.lane_positions()
+        receptor_y = h - 130 if self.downscroll else 120
+        self.receptor_flashes[lane] = 1.0
+        self.splashes.append({"lane": lane, "x": ply_xs[lane], "y": receptor_y, "ttl": 0.28, "life": 0.28})
+        self.hit_popups.append({
+            "text": rating.upper(),
+            "sub": f"{diff:+.0f} ms",
+            "x": w // 2,
+            "y": 150 if self.downscroll else 220,
+            "ttl": 0.62,
+            "life": 0.62,
+        })
+
     def try_hit(self, lane: int):
         if not self.countdown_done:
             return
@@ -167,6 +186,7 @@ class GameplayState(State):
         if not candidates:
             if not self.app.config.get("gameplay", {}).get("ghost_tapping", True):
                 self.score_state.register_miss()
+                self.hit_popups.append({"text": "MISS", "sub": "", "x": self.app.screen.get_width() // 2, "y": 220, "ttl": 0.45, "life": 0.45})
             return
         note = min(candidates, key=lambda n: abs(n.time_ms - pos))
         note.hit = True
@@ -176,7 +196,8 @@ class GameplayState(State):
         rating = self.score_state.register_hit(diff)
         anim = ("singLEFT", "singDOWN", "singUP", "singRIGHT")[lane]
         self.characters["bf"].play(anim, force=True)
-        self.camera.bump(0.012 if rating == "sick" else 0.006)
+        self.camera.bump(0.016 if rating == "sick" else 0.009)
+        self.spawn_hit_feedback(lane, rating, diff)
         self.run_entry_graphs("OnNoteHit", {"lane": lane, "kind": note.kind, "rating": rating, "time": note.time_ms})
 
     def release_lane(self, lane: int) -> None:
@@ -192,12 +213,14 @@ class GameplayState(State):
             self.score_state.register_miss()
             self.characters["bf"].play(("singLEFTmiss", "singDOWNmiss", "singUPmiss", "singRIGHTmiss")[lane], force=True)
             self.camera.shake(4, 0.08)
+            self.hit_popups.append({"text": "MISS", "sub": "hold", "x": self.app.screen.get_width() // 2, "y": 220, "ttl": 0.45, "life": 0.45})
 
     def update_sustains(self, pos: float) -> None:
         for lane, note in list(self.active_sustains.items()):
             if note.missed:
                 self.active_sustains.pop(lane, None)
                 continue
+            self.receptor_flashes[lane] = max(self.receptor_flashes.get(lane, 0.0), 0.45)
             if lane not in self.held_lanes and pos < note.end_time_ms - self.sustain_grace:
                 note.missed = True
                 note.sustain_finished = True
@@ -229,6 +252,7 @@ class GameplayState(State):
                 note.sustain_finished = True
                 self.score_state.register_hit(0)
                 self.characters["bf"].play(("singLEFT", "singDOWN", "singUP", "singRIGHT")[note.lane], force=True)
+                self.spawn_hit_feedback(note.lane, "sick", 0)
 
     def miss_passed_notes(self, pos: float):
         for note in self.chart.notes:
@@ -238,6 +262,7 @@ class GameplayState(State):
                 note.missed = True
                 self.score_state.register_miss()
                 self.camera.shake(3, 0.08)
+                self.hit_popups.append({"text": "MISS", "sub": "", "x": self.app.screen.get_width() // 2, "y": 220, "ttl": 0.45, "life": 0.45})
 
     def process_events(self, pos: float):
         while self.event_index < len(self.events):
@@ -288,8 +313,21 @@ class GameplayState(State):
             self.song_started = pygame.time.get_ticks()
             self.audio.play()
 
+    def update_feedback(self, dt: float) -> None:
+        decay = dt * 6.8
+        for lane in list(self.receptor_flashes):
+            self.receptor_flashes[lane] = max(0.0, self.receptor_flashes.get(lane, 0.0) - decay)
+        for item in self.hit_popups:
+            item["ttl"] -= dt
+            item["y"] -= dt * 58
+        self.hit_popups = [x for x in self.hit_popups if x["ttl"] > 0]
+        for item in self.splashes:
+            item["ttl"] -= dt
+        self.splashes = [x for x in self.splashes if x["ttl"] > 0]
+
     def update(self, dt):
         self.toast.update(dt)
+        self.update_feedback(dt)
         if self.paused:
             return
         if not self.countdown_done:
@@ -324,8 +362,8 @@ class GameplayState(State):
 
     def lane_positions(self):
         w, h = self.app.screen.get_size()
-        gap = 74
-        opp_center = int(w * 0.28)
+        gap = 72
+        opp_center = int(w * 0.30)
         ply_center = int(w * 0.72)
         opp = [opp_center + (i - 1.5) * gap for i in range(4)]
         ply = [ply_center + (i - 1.5) * gap for i in range(4)]
@@ -340,10 +378,11 @@ class GameplayState(State):
             self.characters[key].draw(screen, cam_off)
 
         pos = self.song_position()
-        receptor_y = h - 130 if self.downscroll else 120
+        receptor_y = h - 130 if self.downscroll else 118
         opp_xs, ply_xs = self.lane_positions()
-        self.note_renderer.draw_receptors(screen, opp_xs, receptor_y, self.small)
-        self.note_renderer.draw_receptors(screen, ply_xs, receptor_y, self.small)
+        player_labels = self.app.input.lane_labels() if hasattr(self.app.input, "lane_labels") else ("D", "F", "J", "K")
+        self.note_renderer.draw_receptors(screen, opp_xs, receptor_y, self.small, labels=("", "", "", ""), active=set(), flashes={}, show_labels=False, alpha=125)
+        self.note_renderer.draw_receptors(screen, ply_xs, receptor_y, self.small, labels=player_labels, active=self.held_lanes, flashes=self.receptor_flashes, show_labels=True)
 
         px_per_ms = 0.42 * self.scroll_speed
         visible_ahead = h / max(0.01, px_per_ms) + 500
@@ -366,10 +405,15 @@ class GameplayState(State):
                 sustain_px = int(max(0.0, note.end_time_ms - pos) * px_per_ms)
             else:
                 sustain_px = int(note.length_ms * px_per_ms) if note.length_ms > 0 else 0
-            alpha = 255 if note.must_hit else 150
+            alpha = 255 if note.must_hit else 92
             self.note_renderer.draw_note(screen, note.lane, x, int(y), alpha=alpha, sustain_px=sustain_px, downscroll=self.downscroll, kind=note.kind, font=self.small)
 
+        for splash in self.splashes:
+            life = splash["ttl"] / max(0.001, splash.get("life", 0.28))
+            self.note_renderer.draw_splash(screen, int(splash["lane"]), int(splash["x"]), int(splash["y"]), life)
+
         self.draw_hud(screen)
+        self.draw_hit_popups(screen)
         self.toast.draw(screen, self.small)
 
         for i, item in enumerate(self.spawned_text[-3:]):
@@ -381,11 +425,34 @@ class GameplayState(State):
 
         if self.paused:
             overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 150))
+            overlay.fill((0, 0, 0, 165))
             screen.blit(overlay, (0, 0))
-            draw_text(screen, self.big, "PAUSED", (w // 2, h // 2), (255, 255, 255), "center")
+            panel = pygame.Rect(w // 2 - 220, h // 2 - 95, 440, 190)
+            draw_panel(screen, panel, fill=(18, 18, 30, 235), border=(255, 220, 90))
+            draw_text(screen, self.big, "PAUSED", (w // 2, h // 2 - 42), (255, 235, 110), "center")
+            draw_text(screen, self.font, "Enter/P: resume   R: restart   Esc: freeplay", (w // 2, h // 2 + 28), (230, 230, 245), "center")
         elif not self.countdown_done and self.countdown_label:
+            draw_text(screen, self.big, self.countdown_label, (w // 2 + 4, h // 2 - 66), (0, 0, 0), "center")
             draw_text(screen, self.big, self.countdown_label, (w // 2, h // 2 - 70), (255, 230, 90), "center")
+
+    def draw_hit_popups(self, screen):
+        for item in self.hit_popups[-5:]:
+            life = item["ttl"] / max(0.001, item.get("life", 0.6))
+            alpha = int(255 * clamp(life, 0.0, 1.0))
+            text = str(item.get("text", ""))
+            sub = str(item.get("sub", ""))
+            color = (255, 235, 100) if text == "SICK" else (210, 255, 210) if text == "GOOD" else (255, 165, 135) if text == "BAD" else (255, 95, 95) if text == "MISS" else (245, 245, 245)
+            surf = self.big.render(text, True, color)
+            surf.set_alpha(alpha)
+            rect = surf.get_rect(center=(int(item["x"]), int(item["y"])))
+            shadow = self.big.render(text, True, (0, 0, 0))
+            shadow.set_alpha(alpha)
+            screen.blit(shadow, rect.move(3, 3))
+            screen.blit(surf, rect)
+            if sub:
+                small = self.small.render(sub, True, (235, 235, 245))
+                small.set_alpha(alpha)
+                screen.blit(small, small.get_rect(center=(int(item["x"]), int(item["y"] + 38))))
 
     def draw_hud(self, screen):
         w, h = screen.get_size()
@@ -395,15 +462,14 @@ class GameplayState(State):
         fill = health_rect.copy()
         fill.width = int(health_rect.width * clamp(self.score_state.health / 2.0, 0.0, 1.0))
         pygame.draw.rect(screen, (80, 220, 130), fill, border_radius=8)
-        pygame.draw.rect(screen, (240, 240, 240), health_rect, 2, border_radius=8)
+        pygame.draw.rect(screen, (255, 255, 255), health_rect, 2, border_radius=8)
 
         variant = f" / {self.variation}" if self.variation else ""
         left = f"{self.song.display_name} [{self.difficulty}{variant}]"
         right = f"Score {self.score_state.score}  Combo {self.score_state.combo}  Miss {self.score_state.misses}  Acc {self.score_state.accuracy:.1f}%"
-        draw_text(screen, self.font, left, (22, 14), (245, 245, 245))
-        draw_text(screen, self.font, right, (w - 22, 14), (245, 245, 245), "topright")
-        if self.score_state.last_rating:
-            draw_text(screen, self.big, self.score_state.last_rating, (w // 2, 62), (255, 230, 90), "center")
+        draw_text(screen, self.font, left, (12, 54), (0, 0, 0))
+        draw_text(screen, self.font, left, (10, 52), (245, 245, 245))
+        draw_text(screen, self.font, right, (w - 10, 52), (245, 245, 245), "topright")
         if self.botplay:
             draw_text(screen, self.font, "BOTPLAY", (w // 2, h - 48), (255, 200, 70), "center")
 
