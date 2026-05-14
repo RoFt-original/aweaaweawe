@@ -37,13 +37,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "voices_volume": 0.9
     },
     "keybinds": {
-        "left": ["a", "left"],
-        "down": ["s", "down"],
-        "up": ["w", "up"],
-        "right": ["d", "right"],
+        # FNF-like gameplay layout. Arrows remain as alternates.
+        "left": ["d", "left"],
+        "down": ["f", "down"],
+        "up": ["j", "up"],
+        "right": ["k", "right"],
+        # Menu layout is separated so D/F/J/K does not break navigation.
+        "menu_left": ["a", "left"],
+        "menu_down": ["s", "down"],
+        "menu_up": ["w", "up"],
+        "menu_right": ["d", "right"],
         "accept": ["return", "space"],
         "back": ["escape"],
-        "pause": ["p"],
+        "pause": ["return", "p"],
         "reset": ["r"],
         "variation": ["tab"],
         "fullscreen": ["f11"]
@@ -73,11 +79,38 @@ def save_config(root: Path, config: dict[str, Any]) -> None:
 
 
 def migrate_config(config: dict[str, Any]) -> None:
-    """Keep older settings usable without preserving painful key conflicts."""
+    """Keep older settings usable and split gameplay/menu input safely."""
     keybinds = config.setdefault("keybinds", {})
-    if set(keybinds.get("pause", [])) & set(keybinds.get("accept", [])):
-        keybinds["pause"] = ["p"]
+
+    # Older settings used A/S/W/D as gameplay lanes. That makes D both a lane and
+    # menu-right once we add real FNF controls, so migrate only untouched defaults.
+    legacy_gameplay = {
+        "left": ["a", "left"],
+        "down": ["s", "down"],
+        "up": ["w", "up"],
+        "right": ["d", "right"],
+    }
+    current_gameplay = {k: keybinds.get(k) for k in legacy_gameplay}
+    if current_gameplay == legacy_gameplay:
+        keybinds["left"] = ["d", "left"]
+        keybinds["down"] = ["f", "down"]
+        keybinds["up"] = ["j", "up"]
+        keybinds["right"] = ["k", "right"]
+
+    keybinds.setdefault("left", ["d", "left"])
+    keybinds.setdefault("down", ["f", "down"])
+    keybinds.setdefault("up", ["j", "up"])
+    keybinds.setdefault("right", ["k", "right"])
+    keybinds.setdefault("menu_left", ["a", "left"])
+    keybinds.setdefault("menu_down", ["s", "down"])
+    keybinds.setdefault("menu_up", ["w", "up"])
+    keybinds.setdefault("menu_right", ["d", "right"])
+    keybinds.setdefault("accept", ["return", "space"])
+    keybinds.setdefault("back", ["escape"])
+    keybinds.setdefault("pause", ["return", "p"])
+    keybinds.setdefault("reset", ["r"])
     keybinds.setdefault("variation", ["tab"])
     keybinds.setdefault("fullscreen", ["f11"])
+
     gameplay = config.setdefault("gameplay", {})
     gameplay.setdefault("sustain_release_grace_ms", 120)
