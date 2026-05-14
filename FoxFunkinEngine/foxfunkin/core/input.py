@@ -22,6 +22,22 @@ class InputMap:
                 return action
         return None
 
+    def menu_action_for_key(self, key: int) -> str | None:
+        menu_actions = {
+            "menu_left": "left",
+            "menu_down": "down",
+            "menu_up": "up",
+            "menu_right": "right",
+        }
+        for action, keys in self.bindings.items():
+            if key not in keys:
+                continue
+            if action in menu_actions:
+                return menu_actions[action]
+            if action in ("accept", "back", "variation", "fullscreen"):
+                return action
+        return None
+
     def pressed(self, action: str, keys_state=None) -> bool:
         if keys_state is None:
             keys_state = pygame.key.get_pressed()
@@ -32,3 +48,13 @@ class InputMap:
             if key in self.bindings.get(action, []):
                 return idx
         return None
+
+    def lane_labels(self) -> tuple[str, str, str, str]:
+        labels: list[str] = []
+        for action in ("left", "down", "up", "right"):
+            names = []
+            for key in self.bindings.get(action, []):
+                if key != pygame.K_UNKNOWN:
+                    names.append(pygame.key.name(key).upper())
+            labels.append("/".join(names[:2]) or "?")
+        return tuple(labels)  # type: ignore[return-value]
