@@ -17,25 +17,31 @@ class InputMap:
             self.bindings[action] = [key_constant(n) for n in names]
 
     def action_for_key(self, key: int) -> str | None:
+        # Menu aliases are skipped here. Gameplay calls this plus lane_for_key(),
+        # while menu screens call menu_action_for_key().
         for action, keys in self.bindings.items():
+            if action.startswith("menu_"):
+                continue
             if key in keys:
                 return action
         return None
 
     def menu_action_for_key(self, key: int) -> str | None:
-        menu_actions = {
-            "menu_left": "left",
-            "menu_down": "down",
-            "menu_up": "up",
-            "menu_right": "right",
-        }
-        for action, keys in self.bindings.items():
-            if key not in keys:
-                continue
-            if action in menu_actions:
-                return menu_actions[action]
-            if action in ("accept", "back", "variation", "fullscreen"):
-                return action
+        # Menu-only movement first: D can mean menu-right, while D is also the
+        # left note key during gameplay.
+        ordered = (
+            ("menu_left", "left"),
+            ("menu_down", "down"),
+            ("menu_up", "up"),
+            ("menu_right", "right"),
+            ("accept", "accept"),
+            ("back", "back"),
+            ("variation", "variation"),
+            ("fullscreen", "fullscreen"),
+        )
+        for bind_name, action_name in ordered:
+            if key in self.bindings.get(bind_name, []):
+                return action_name
         return None
 
     def pressed(self, action: str, keys_state=None) -> bool:
